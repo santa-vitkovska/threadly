@@ -3,6 +3,16 @@ import {
   setDoc,
   getDoc,
   serverTimestamp,
+  collection,
+  query,
+  where,
+  addDoc,
+  onSnapshot,
+  orderBy,
+  limitToLast,
+  updateDoc,
+  deleteDoc,
+  type Unsubscribe,
 } from 'firebase/firestore';
 import { getFirebaseFirestore } from './config';
 
@@ -10,6 +20,7 @@ export interface UserProfile {
   displayName: string;
   avatar?: string;
   status?: string;
+  lastSeen?: any;
   createdAt: any;
   updatedAt: any;
 }
@@ -113,5 +124,221 @@ export const updateUserProfile = async (
 
   // Use setDoc with merge to create or update
   await setDoc(userRef, cleanPatch, { merge: true });
+};
+
+/**
+ * Update user's last seen timestamp
+ */
+export const updateLastSeen = async (uid: string): Promise<void> => {
+  const db = getFirebaseFirestore();
+  const userRef = doc(db, 'users', uid);
+  await updateDoc(userRef, {
+    lastSeen: serverTimestamp(),
+  });
+};
+
+// Chat interfaces
+export interface Chat {
+  id: string;
+  members: string[];
+  lastMessage?: string;
+  lastMessageAt?: any;
+  createdAt: any;
+}
+
+export interface Message {
+  id: string;
+  text: string;
+  senderId: string;
+  type: 'text' | 'image' | 'file' | 'system';
+  attachments?: MessageAttachment[];
+  readBy: Record<string, any>;
+  createdAt: any;
+}
+
+export interface MessageAttachment {
+  url: string;
+  path: string;
+  type: string;
+  name: string;
+  size?: number;
+}
+
+export interface MessagePayload {
+  text: string;
+  senderId: string;
+  type?: 'text' | 'image' | 'file' | 'system';
+  attachments?: MessageAttachment[];
+}
+
+/**
+ * Create or get an existing chat between members
+ * Uses sorted member IDs joined as document ID for deduplication
+ */
+export const createOrGetChat = async (members: string[]): Promise<string> => {
+  if (members.length < 2) {
+    throw new Error('Chat must have at least 2 members');
+  }
+
+  const db = getFirebaseFirestore();
+  
+  // Sort member IDs and join to create consistent chat ID
+  const sortedMembers = [...members].sort();
+  const chatId = sortedMembers.join('_');
+  
+  const chatRef = doc(db, 'chats', chatId);
+  const chatSnap = await getDoc(chatRef);
+  
+  if (!chatSnap.exists()) {
+    await setDoc(chatRef, {
+      members: sortedMembers,
+      createdAt: serverTimestamp(),
+    });
+  }
+  
+  return chatId;
+};
+
+/**
+ * Get real-time listener for user's chats
+ */
+export const getUserChats = (
+  uid: string,
+  callback: (chats: Chat[]) => void
+): Unsubscribe => {
+  const db = getFirebaseFirestore();
+  const chatsRef = collection(db, 'chats');
+  const q = query(chatsRef, where('members', 'array-contains', uid));
+  
+  return onSnapshot(q, (snapshot) => {
+    const chats: Chat[] = [];
+    snapshot.forEach((doc) => {
+      chats.push({
+        id: doc.id,
+        ...doc.data(),
+      } as Chat);
+    });
+    // Sort by lastMessageAt descending
+    chats.sort((a, b) => {
+      const aTime = a.lastMessageAt?.toMillis?.() || 0;
+      const bTime = b.lastMessageAt?.toMillis?.() || 0;
+      return bTime - aTime;
+    });
+    callback(chats);
+  });
+};
+
+/**
+ * Send a message to a chat
+ */
+export const sendMessage = async (
+  chatId: string,
+  messagePayload: MessagePayload
+): Promise<string> => {
+  const db = getFirebaseFirestore();
+  const messagesRef = collection(db, 'chats', chatId, 'messages');
+  
+  const messageData = {
+    text: messagePayload.text,
+    senderId: messagePayload.senderId,
+    type: messagePayload.type || 'text',
+    attachments: messagePayload.attachments || [],
+    readBy: {
+      [messagePayload.senderId]: serverTimestamp(),
+    },
+    createdAt: serverTimestamp(),
+  };
+  
+  const docRef = await addDoc(messagesRef, messageData);
+  
+  // Update chat's lastMessage and lastMessageAt
+  const chatRef = doc(db, 'chats', chatId);
+  await updateDoc(chatRef, {
+    lastMessage: messagePayload.text,
+    lastMessageAt: serverTimestamp(),
+  });
+  
+  return docRef.id;
+};
+
+/**
+ * Listen to messages in a chat with real-time updates
+ */
+export const listenMessages = (
+  chatId: string,
+  callback: (messages: Message[]) => void,
+  messageLimit: number = 50
+): Unsubscribe => {
+  const db = getFirebaseFirestore();
+  const messagesRef = collection(db, 'chats', chatId, 'messages');
+  const q = query(messagesRef, orderBy('createdAt', 'desc'), limitToLast(messageLimit));
+  
+  return onSnapshot(q, (snapshot) => {
+    const messages: Message[] = [];
+    snapshot.forEach((doc) => {
+      messages.push({
+        id: doc.id,
+        ...doc.data(),
+      } as Message);
+    });
+    // Reverse to show oldest first
+    messages.reverse();
+    callback(messages);
+  });
+};
+
+/**
+ * Mark a message as read by a user
+ */
+export const markMessageAsRead = async (
+  chatId: string,
+  messageId: string,
+  uid: string
+): Promise<void> => {
+  const db = getFirebaseFirestore();
+  const messageRef = doc(db, 'chats', chatId, 'messages', messageId);
+  await updateDoc(messageRef, {
+    [`readBy.${uid}`]: serverTimestamp(),
+  });
+};
+
+/**
+ * Set typing indicator for a user in a chat
+ */
+export const setTyping = async (
+  chatId: string,
+  uid: string,
+  isTyping: boolean
+): Promise<void> => {
+  const db = getFirebaseFirestore();
+  const typingRef = doc(db, 'chats', chatId, 'typing', uid);
+  
+  if (isTyping) {
+    await setDoc(typingRef, {
+      uid,
+      timestamp: serverTimestamp(),
+    });
+  } else {
+    await deleteDoc(typingRef);
+  }
+};
+
+/**
+ * Listen to typing indicators in a chat
+ */
+export const listenTyping = (
+  chatId: string,
+  callback: (typingUsers: string[]) => void
+): Unsubscribe => {
+  const db = getFirebaseFirestore();
+  const typingRef = collection(db, 'chats', chatId, 'typing');
+  
+  return onSnapshot(typingRef, (snapshot) => {
+    const typingUsers: string[] = [];
+    snapshot.forEach((doc) => {
+      typingUsers.push(doc.id);
+    });
+    callback(typingUsers);
+  });
 };
 
