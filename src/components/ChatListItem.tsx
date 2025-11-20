@@ -4,14 +4,14 @@ import { formatDistanceToNow } from 'date-fns';
 import { Avatar } from './Avatar';
 import { getUserProfile, type UserProfile } from '../lib/firebase/firestore';
 import type { Chat } from '../lib/firebase/firestore';
-import { useAuth } from '../hooks/useAuth';
+import { useInternalAuth } from '../contexts/InternalAuthContext';
 
 interface ChatListItemProps {
   chat: Chat;
 }
 
 export const ChatListItem = ({ chat }: ChatListItemProps) => {
-  const { user } = useAuth();
+  const { user } = useInternalAuth();
   const [memberProfiles, setMemberProfiles] = useState<Record<string, UserProfile>>({});
   const [unreadCount, setUnreadCount] = useState(0);
   const [onlineMembers, setOnlineMembers] = useState<string[]>([]);

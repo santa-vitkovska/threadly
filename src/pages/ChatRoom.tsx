@@ -1,18 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Layout } from '../components/Layout';
 import { useChat, useTyping } from '../contexts/ChatContext';
 import { MessageBubble } from '../components/MessageBubble';
 import { MessageComposer } from '../components/MessageComposer';
 import { markMessageAsRead, updateLastSeen } from '../lib/firebase/firestore';
 import { getFirebaseFirestore } from '../lib/firebase/config';
 import { getDoc, doc } from 'firebase/firestore';
-import { useAuth } from '../hooks/useAuth';
+import { useInternalAuth } from '../contexts/InternalAuthContext';
 import { getUserProfile, type UserProfile } from '../lib/firebase/firestore';
 
 export const ChatRoom = () => {
   const { chatId } = useParams<{ chatId: string }>();
-  const { user } = useAuth();
+  const { user } = useInternalAuth();
   const { messages, loading } = useChat(chatId || null);
   const typingUsers = useTyping(chatId || null);
   const [chatMembers, setChatMembers] = useState<Record<string, UserProfile>>({});
@@ -134,16 +133,13 @@ export const ChatRoom = () => {
 
   if (!chatId) {
     return (
-      <Layout>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <p className="text-gray-600">Invalid chat ID</p>
-        </div>
-      </Layout>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <p className="text-gray-600">Invalid chat ID</p>
+      </div>
     );
   }
 
   return (
-    <Layout>
       <div className="flex flex-col h-screen max-h-screen">
         {/* Header */}
         <div className="bg-white border-b border-gray-200 px-4 py-3">
@@ -191,6 +187,5 @@ export const ChatRoom = () => {
           recentMessages={messages}
         />
       </div>
-    </Layout>
   );
 };

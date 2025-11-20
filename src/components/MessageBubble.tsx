@@ -1,10 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import { Avatar } from './Avatar';
 import type { Message } from '../lib/firebase/firestore';
-import { useAuth } from '../hooks/useAuth';
+import { useInternalAuth } from '../contexts/InternalAuthContext';
 import { getUserProfile, type UserProfile } from '../lib/firebase/firestore';
-import { useEffect, useState } from 'react';
 
 interface MessageBubbleProps {
   message: Message;
@@ -13,7 +12,7 @@ interface MessageBubbleProps {
 }
 
 export const MessageBubble = ({ message, showAvatar = false, showSender = false }: MessageBubbleProps) => {
-  const { user } = useAuth();
+  const { user } = useInternalAuth();
   const [senderProfile, setSenderProfile] = useState<UserProfile | null>(null);
   const isOwnMessage = message.senderId === user?.uid;
   const isSystemMessage = message.type === 'system';

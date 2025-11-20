@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { useAuth } from './AuthContext';
+import { useInternalAuth } from './InternalAuthContext';
 import {
   getUserChats,
   listenMessages,
@@ -20,7 +20,7 @@ interface ChatProviderProps {
 }
 
 export const ChatProvider = ({ children }: ChatProviderProps) => {
-  const { user } = useAuth();
+  const { user } = useInternalAuth();
   const [chats, setChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -86,7 +86,7 @@ export const useChat = (chatId: string | null) => {
  * Hook to listen to typing indicators in a specific chat
  */
 export const useTyping = (chatId: string | null) => {
-  const { user } = useAuth();
+  const { user } = useInternalAuth();
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
 
   useEffect(() => {

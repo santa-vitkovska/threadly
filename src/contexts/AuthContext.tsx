@@ -3,7 +3,7 @@ import type { User } from 'firebase/auth';
 import { onAuthStateChanged, signUp as authSignUp, signIn as authSignIn, signOut as authSignOut, signInWithGoogle as authSignInWithGoogle } from '../lib/firebase/auth';
 import { createUserProfile, getUserProfile, type UserProfile } from '../lib/firebase/firestore';
 
-interface AuthContextType {
+export interface AuthContextType {
   user: User | null;
   profile: UserProfile | null;
   loading: boolean;

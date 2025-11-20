@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { searchUsers, createOrGetChat, type UserProfileWithId } from '../lib/firebase/firestore';
-import { useAuth } from '../hooks/useAuth';
+import { useInternalAuth } from '../contexts/InternalAuthContext';
 import { Avatar } from './Avatar';
 
 interface NewChatModalProps {
@@ -10,7 +10,7 @@ interface NewChatModalProps {
 }
 
 export const NewChatModal = ({ isOpen, onClose }: NewChatModalProps) => {
-  const { user } = useAuth();
+  const { user } = useInternalAuth();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<UserProfileWithId[]>([]);

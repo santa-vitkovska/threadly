@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { sendMessage, setTyping } from '../lib/firebase/firestore';
 import { uploadMessageAttachment } from '../lib/firebase/storage';
-import { useAuth } from '../hooks/useAuth';
+import { useInternalAuth } from '../contexts/InternalAuthContext';
 import { summarizeMessages } from '../lib/ai/summarize';
 
 interface MessageComposerProps {
@@ -11,7 +11,7 @@ interface MessageComposerProps {
 }
 
 export const MessageComposer = ({ chatId, onMessageSent, recentMessages = [] }: MessageComposerProps) => {
-  const { user } = useAuth();
+  const { user } = useInternalAuth();
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
