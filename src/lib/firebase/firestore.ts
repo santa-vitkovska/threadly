@@ -2,6 +2,7 @@ import {
   doc,
   setDoc,
   getDoc,
+  getDocs,
   serverTimestamp,
   collection,
   query,
@@ -10,6 +11,7 @@ import {
   onSnapshot,
   orderBy,
   limitToLast,
+  limit,
   updateDoc,
   deleteDoc,
   type Unsubscribe,
@@ -137,6 +139,78 @@ export const updateLastSeen = async (uid: string): Promise<void> => {
   });
 };
 
+/**
+ * Search for users by display name
+ * Returns users with their UIDs included
+ */
+export interface UserProfileWithId extends UserProfile {
+  uid: string;
+}
+
+/**
+ * Search for users by display name
+ * Note: Firestore doesn't support case-insensitive search natively,
+ * so we search with both uppercase and lowercase prefixes and filter client-side
+ */
+export const searchUsers = async (searchTerm: string, limitCount: number = 20): Promise<UserProfileWithId[]> => {
+  if (!searchTerm.trim()) {
+    return [];
+  }
+
+  const db = getFirebaseFirestore();
+  const usersRef = collection(db, 'users');
+  
+  const searchLower = searchTerm.toLowerCase();
+  const searchUpper = searchTerm.charAt(0).toUpperCase() + searchTerm.slice(1);
+  
+  // Try both the original search term and capitalized version
+  // Firestore range queries are case-sensitive, so we need to try both
+  const queries = [
+    query(
+      usersRef,
+      where('displayName', '>=', searchTerm),
+      where('displayName', '<=', searchTerm + '\uf8ff'),
+      limit(limitCount * 3)
+    ),
+  ];
+  
+  // If first char is lowercase, also try uppercase version
+  if (searchTerm[0] === searchTerm[0].toLowerCase() && searchUpper !== searchTerm) {
+    queries.push(
+      query(
+        usersRef,
+        where('displayName', '>=', searchUpper),
+        where('displayName', '<=', searchUpper + '\uf8ff'),
+        limit(limitCount * 3)
+      )
+    );
+  }
+  
+  const allUsers = new Map<string, UserProfileWithId>();
+  
+  // Execute all queries and combine results
+  for (const q of queries) {
+    try {
+      const querySnapshot = await getDocs(q);
+      querySnapshot.forEach((docSnap) => {
+        const userData = docSnap.data() as UserProfile;
+        // Filter client-side for case-insensitive contains matching
+        if (userData.displayName.toLowerCase().includes(searchLower)) {
+          allUsers.set(docSnap.id, {
+            ...userData,
+            uid: docSnap.id,
+          });
+        }
+      });
+    } catch (error) {
+      // If query fails (e.g., missing index), continue with other queries
+      console.warn('Search query failed:', error);
+    }
+  }
+  
+  return Array.from(allUsers.values()).slice(0, limitCount);
+};
+
 // Chat interfaces
 export interface Chat {
   id: string;
@@ -187,16 +261,38 @@ export const createOrGetChat = async (members: string[]): Promise<string> => {
   const chatId = sortedMembers.join('_');
   
   const chatRef = doc(db, 'chats', chatId);
-  const chatSnap = await getDoc(chatRef);
   
-  if (!chatSnap.exists()) {
-    await setDoc(chatRef, {
-      members: sortedMembers,
-      createdAt: serverTimestamp(),
-    });
+  try {
+    const chatSnap = await getDoc(chatRef);
+    
+    if (!chatSnap.exists()) {
+      try {
+        await setDoc(chatRef, {
+          members: sortedMembers,
+          createdAt: serverTimestamp(),
+        });
+        console.log('Chat created successfully:', chatId);
+      } catch (createError: any) {
+        // If creation fails, it might be a permissions issue
+        console.error('Error creating chat document:', createError);
+        if (createError?.code === 'permission-denied' || createError?.code === 'PERMISSION_DENIED') {
+          throw new Error(`Permission denied: Unable to create chat. Code: ${createError.code}. Please check Firestore rules.`);
+        }
+        throw createError;
+      }
+    } else {
+      console.log('Chat already exists:', chatId);
+    }
+    
+    return chatId;
+  } catch (readError: any) {
+    // If read fails, it might be a permissions issue
+    console.error('Error reading chat document:', readError);
+    if (readError?.code === 'permission-denied' || readError?.code === 'PERMISSION_DENIED') {
+      throw new Error(`Permission denied: Unable to access chats. Code: ${readError.code}. Please check Firestore rules. Make sure you've deployed the latest rules.`);
+    }
+    throw readError;
   }
-  
-  return chatId;
 };
 
 /**
@@ -210,22 +306,31 @@ export const getUserChats = (
   const chatsRef = collection(db, 'chats');
   const q = query(chatsRef, where('members', 'array-contains', uid));
   
-  return onSnapshot(q, (snapshot) => {
-    const chats: Chat[] = [];
-    snapshot.forEach((doc) => {
-      chats.push({
-        id: doc.id,
-        ...doc.data(),
-      } as Chat);
-    });
-    // Sort by lastMessageAt descending
-    chats.sort((a, b) => {
-      const aTime = a.lastMessageAt?.toMillis?.() || 0;
-      const bTime = b.lastMessageAt?.toMillis?.() || 0;
-      return bTime - aTime;
-    });
-    callback(chats);
-  });
+  return onSnapshot(
+    q, 
+    (snapshot) => {
+      const chats: Chat[] = [];
+      snapshot.forEach((doc) => {
+        chats.push({
+          id: doc.id,
+          ...doc.data(),
+        } as Chat);
+      });
+      // Sort by lastMessageAt descending
+      chats.sort((a, b) => {
+        const aTime = a.lastMessageAt?.toMillis?.() || 0;
+        const bTime = b.lastMessageAt?.toMillis?.() || 0;
+        return bTime - aTime;
+      });
+      callback(chats);
+    },
+    (error) => {
+      // Handle errors (e.g., permissions denied)
+      console.error('Error fetching chats:', error);
+      // Still call callback with empty array so loading state updates
+      callback([]);
+    }
+  );
 };
 
 /**
