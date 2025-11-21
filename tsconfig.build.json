@@ -5,9 +5,11 @@
     "declaration": true,
     "declarationMap": true,
     "emitDeclarationOnly": true,
-    "outDir": "./dist"
+    "outDir": "./dist",
+    "moduleResolution": "bundler",
+    "verbatimModuleSyntax": false
   },
-  "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
+  "include": ["src/index.ts", "src/components/**/*", "src/types/**/*", "src/contexts/**/*", "src/hooks/**/*", "src/lib/**/*"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/main.tsx", "src/App.tsx"]
 }
 
