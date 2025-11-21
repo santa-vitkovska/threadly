@@ -12,6 +12,7 @@ export default defineConfig({
       fileName: (format) => `threadly.${format}.js`,
       formats: ['es', 'umd']
     },
+    cssCodeSplit: false, // Bundle all CSS into a single file
     rollupOptions: {
       external: ['react', 'react-dom', 'react-router-dom', 'firebase'],
       output: {
@@ -20,7 +21,8 @@ export default defineConfig({
           'react-dom': 'ReactDOM',
           'react-router-dom': 'ReactRouterDOM',
           firebase: 'Firebase'
-        }
+        },
+        assetFileNames: 'threadly.[ext]' // Name the CSS file
       }
     }
   }

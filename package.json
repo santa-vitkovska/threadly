@@ -1,6 +1,6 @@
 {
   "name": "threadly-chat-module",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "A modular chat component library for React applications",
   "type": "module",
   "main": "./dist/threadly.umd.js",
@@ -11,7 +11,8 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/threadly.es.js",
       "require": "./dist/threadly.umd.js"
-    }
+    },
+    "./dist/threadly.css": "./dist/threadly.css"
   },
   "files": [
     "dist"
