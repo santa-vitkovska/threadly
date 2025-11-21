@@ -184,7 +184,6 @@ export const ChatRoom = () => {
         {/* Composer */}
         <MessageComposer
           chatId={chatId}
-          recentMessages={messages}
         />
       </div>
   );
